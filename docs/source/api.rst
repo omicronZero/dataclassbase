@@ -6,4 +6,4 @@ API
 
     :recursive:
 
-    myapp
+    dataclassbase
