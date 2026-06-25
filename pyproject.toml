@@ -33,7 +33,7 @@ typecheck = ["mypy"]
 
 # configure ruff
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py314"
 
 [tool.ruff.lint]
@@ -42,6 +42,10 @@ select = [
     "F", # pyflakes
     "I", # isort
     "B", # bugbear
+]
+
+ignore = [
+    "B905"
 ]
 
 [tool.ruff.format]
