@@ -318,7 +318,7 @@ def make_dataclass[TField: Field](cls: type,
         field provider, fields may expose different types of behavior during initialization and attribute assignment.
     :param object_handler: Implements the initialization and attribute assignment of instances of the dataclass.
     """
-    if hasattr(cls, '__dataclass_fields__'):
+    if '__dataclass_fields__' in cls.__dict__:
         raise TypeError('The indicated type already is a dataclass.')
 
     if field_provider is ...:
@@ -492,7 +492,7 @@ class DataclassMetaBase[TField: Field](type):
 @_typing.dataclass_transform(field_specifiers=(Field,))
 class DataclassMeta[TField: Field](DataclassMetaBase[TField]):
     """
-    Provides a basic :class:`Field`-based metaclass. When used as a metaclass, any class (and subclass) inherits a
+    Provides a basic :class:`Field`-based metaclass. When used as a metaclass, the class and any subclass inherit a
     dataclass-like behavior. See :class:`DataclassMetaBase` and :py:func:`make_dataclass` for further information.
     """
     pass

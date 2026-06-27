@@ -4,7 +4,7 @@ import dataclassbase as dc
 
 
 def check_field(instance: dc.DataclassMeta, name: str, annotation: Any, default: Any = ...) -> None:
-    field: dc.Field = instance.__fields__[name]
+    field: dc.Field = instance.__dataclass_fields__[name]
 
     assert field.name == name
 
