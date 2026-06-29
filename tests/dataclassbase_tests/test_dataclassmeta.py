@@ -165,6 +165,16 @@ def test_fields_overlap() -> None:
         Base(y='y', z='z')
 
 
+# Test __setattr__
+
+
+def test_reassignment() -> None:
+    instance = ThreeFields(1)
+
+    instance.x = 12
+    assert instance.x == 12
+
+
 #
 # Other
 #

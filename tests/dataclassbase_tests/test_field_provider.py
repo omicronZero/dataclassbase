@@ -51,13 +51,13 @@ def test_check_overriding_field() -> None:
         child_overriding = field
 
     class BaseDataclass(metaclass=_dc.DataclassMeta):
-        x: Base = fields.CheckOverrideCallbackField.declare(
+        x: Base = fields.CallbackField.declare(
             check_overriding_field_callback=check_overriding_field_callback_base,
             check_overridden_field_callback=check_overridden_field_callback_base,
         )
 
     class ChildDataclass(BaseDataclass):
-        x: Child = fields.CheckOverrideCallbackField.declare(
+        x: Child = fields.CallbackField.declare(
             check_overriding_field_callback=check_overriding_field_callback_child,
             check_overridden_field_callback=check_overridden_field_callback_child,
         )
@@ -69,3 +69,21 @@ def test_check_overriding_field() -> None:
     assert base_overriding is None
     assert child_overridden_by is None
     assert child_overriding is base_field
+
+
+def test_check_assignment() -> None:
+    reassigned = False
+
+    def check_assignment_callback(obj: _typing.Any) -> None:
+        nonlocal reassigned
+        reassigned = True
+
+    class Dataclass(metaclass=_dc.DataclassMeta):
+        x: int = fields.CallbackField.declare(check_assignment_callback=check_assignment_callback)
+
+    instance = Dataclass(1)
+
+    reassigned = False
+
+    instance.x = 1
+    assert reassigned

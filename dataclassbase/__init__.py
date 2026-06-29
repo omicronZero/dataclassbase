@@ -455,9 +455,13 @@ class ObjectHandler[TField: Field]:
                 field.check_assignment(field.default)
                 assignments[k] = field.default
 
+        obj.__dataclass_initialized__ = False
+
         # assign on current instance
         for k, v in assignments.items():
             setattr(obj, k, v)
+
+        obj.__dataclass_initialized__ = True
 
         # invoke postinit, if available
         postinit = getattr(obj, '__postinit__', None)
@@ -470,7 +474,7 @@ class ObjectHandler[TField: Field]:
         field: Field | None,
         name: str,
         value: _typing.Any,
-        inner_set_attribute: _typing.Callable[[str, _typing.Any], None] | None,
+        inner_set_attribute: _typing.Callable[[_typing.Any, str, _typing.Any], None] | None,
     ) -> None:
         """
         This method gets called when `__setattr__` is invoked for an object.
@@ -482,25 +486,26 @@ class ObjectHandler[TField: Field]:
         :param value: The new value to assign to the attribute.
         :param inner_set_attribute: The original `__setattr__`-procedure, if there was one; `None` otherwise.
         """
-        if field is not None:
-            field.check_assignment(obj)
+        if field is not None and obj.__dataclass_initialized__:
+            field.check_assignment(value)
 
         if inner_set_attribute is None:
             obj.__dict__[name] = value
         else:
-            inner_set_attribute(name, value)
+            inner_set_attribute(obj, name, value)
 
     @property
-    def route_set_attribute(self) -> bool:
+    def override_set_attribute(self) -> bool:
         """
         Indicates whether the `__setattr__` behavior is to be overridden to route to the
-        :py:func:`handle_set_attribute`-method.
-        Typically, it should, since assignments to fields need be checked. In some cases, however, this behavior may not
-        be required (e.g., if the dataclass is to be frozen, anyway).
+        :py:func:`handle_set_attribute`-method. Defaults to `True`.
+
+        Typically, set-attribute gets overridden, since assignments to fields need be checked. In some cases, however,
+        this behavior may not be required (e.g., if the dataclass is to be frozen, anyway).
 
         :return: `True` if `__setattr__` is to be overridden, `False` otherwise.
         """
-        return False
+        return True
 
 
 def make_dataclass[TField: Field](
@@ -553,7 +558,7 @@ def make_dataclass[TField: Field](
 
     cls.__init__ = init  # type: ignore[misc]
 
-    if object_handler.route_set_attribute:
+    if object_handler.override_set_attribute:
         inner_set_attribute = getattr(cls, '__setattr__', None)
 
         def setattrib(self: _typing.Any, name: str, value: _typing.Any) -> None:
