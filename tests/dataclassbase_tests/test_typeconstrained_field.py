@@ -25,6 +25,7 @@ def test_invalid_assignment() -> None:
 def test_unsupported_annotation() -> None:
 
     with _pytest.raises(TypeError):
+
         @_dc.dataclass(field_provider=_dc.TypeConstrainedField)
         class Dataclass:
             x: _typing.Annotated[int, str]

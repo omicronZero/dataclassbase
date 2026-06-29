@@ -1,3 +1,5 @@
+import pytest as _pytest
+
 import dataclassbase as _dc
 
 from . import check_field
@@ -79,6 +81,88 @@ class InheritedOverlap(Inherited):
 def test_inherited_overlap_fields() -> None:
     check_field(InheritedOverlap, 'field', int, 0)
     check_field(InheritedOverlap, 'other', str)
+
+
+# Test initialization
+
+
+class ThreeFields(metaclass=_dc.DataclassMeta):
+    x: int
+    y: str = 'y'
+    z: float = 1.0
+
+
+def test_pos_init_full() -> None:
+    instance = ThreeFields(1, '2', 3.0)
+
+    assert instance.x == 1
+    assert instance.y == '2'
+    assert instance.z == 3.0
+
+
+def test_pos_init_partial() -> None:
+    instance = ThreeFields(1, '2')
+
+    assert instance.x == 1
+    assert instance.y == '2'
+    assert instance.z == 1.0
+
+
+def test_kw_init_full() -> None:
+    instance = ThreeFields(x=1, y='2', z=3.0)
+
+    assert instance.x == 1
+    assert instance.y == '2'
+    assert instance.z == 3.0
+
+
+def test_kw_init_partial() -> None:
+    instance = ThreeFields(x=1, z=3.0)
+
+    assert instance.x == 1
+    assert instance.y == 'y'
+    assert instance.z == 3.0
+
+
+def test_mixed_init_full() -> None:
+    instance = ThreeFields(1, y='2', z=3.0)
+
+    assert instance.x == 1
+    assert instance.y == '2'
+    assert instance.z == 3.0
+
+
+def test_mixed_init_partial() -> None:
+    instance = ThreeFields(1, z=3.0)
+
+    assert instance.x == 1
+    assert instance.y == 'y'
+    assert instance.z == 3.0
+
+
+def test_extra_fields_pos() -> None:
+    with _pytest.raises(TypeError):
+        ThreeFields(1, '2', 3.0, 4)
+
+
+def test_extra_fields_kw() -> None:
+    with _pytest.raises(TypeError):
+        ThreeFields(x=1, y='2', z=3.0, w=4)
+
+
+def test_extra_fields_mixture() -> None:
+    with _pytest.raises(TypeError):
+        ThreeFields(1, 2, z=3.0, w=4)
+
+
+def test_extra_fields_overlap() -> None:
+    with _pytest.raises(TypeError):
+        ThreeFields(1, '2', y='x')
+
+
+def test_fields_overlap() -> None:
+    with _pytest.raises(TypeError):
+        Base(y='y', z='z')
 
 
 #

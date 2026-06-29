@@ -731,6 +731,7 @@ class TypeConstrainedField(Field):
     The annotation must provide an `__instancecheck__` to perform assignment checks. Note that the instance check gets
     invoked once with `None` during initialization to eliminate the .
     """
+
     def __init__(
         self,
         name: str,
