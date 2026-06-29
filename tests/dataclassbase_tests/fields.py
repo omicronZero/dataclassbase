@@ -1,4 +1,5 @@
 import typing as _typing
+
 import dataclassbase as _dc
 from dataclassbase import Field
 
@@ -7,13 +8,13 @@ class ValueInSetField(_dc.Field):
     """Represents a field that requires its assignment to be in a set of fixed values."""
 
     def __init__(
-            self,
-            name: str,
-            annotation: _typing.Any,
-            allowed_values: _typing.Container[_typing.Hashable],
-            has_default: bool = False,
-            default: _typing.Any = None,
-            default_factory: _typing.Callable[[], None] | None = None,
+        self,
+        name: str,
+        annotation: _typing.Any,
+        allowed_values: _typing.Container[_typing.Hashable],
+        has_default: bool = False,
+        default: _typing.Any = None,
+        default_factory: _typing.Callable[[], None] | None = None,
     ) -> None:
         if isinstance(allowed_values, _typing.Iterator):
             allowed_values = set(allowed_values)
@@ -28,16 +29,15 @@ class ValueInSetField(_dc.Field):
 
 
 class CheckOverrideCallbackField(_dc.Field):
-
     def __init__(
-            self,
-            name: str,
-            annotation: _typing.Any,
-            has_default: bool = False,
-            default: _typing.Any = None,
-            default_factory: _typing.Callable[[], None] | None = None,
-            check_overriding_field_callback: _typing.Callable[[_dc.Field], None] = None,
-            check_overridden_field_callback: _typing.Callable[[_dc.Field], None] = None
+        self,
+        name: str,
+        annotation: _typing.Any,
+        has_default: bool = False,
+        default: _typing.Any = None,
+        default_factory: _typing.Callable[[], None] | None = None,
+        check_overriding_field_callback: _typing.Callable[[_dc.Field], None] = None,
+        check_overridden_field_callback: _typing.Callable[[_dc.Field], None] = None,
     ) -> None:
         super().__init__(name, annotation, has_default, default, default_factory)
 

@@ -2,7 +2,6 @@ import dataclassbase as _dc
 
 from . import check_field
 
-
 #
 # Base
 #
@@ -77,7 +76,7 @@ class InheritedOverlap(Inherited):
     field: int = 0
 
 
-def test_inheritedoverlap_fields() -> None:
+def test_inherited_overlap_fields() -> None:
     check_field(InheritedOverlap, 'field', int, 0)
     check_field(InheritedOverlap, 'other', str)
 
@@ -85,6 +84,7 @@ def test_inheritedoverlap_fields() -> None:
 #
 # Other
 #
+
 
 def test_incode() -> None:
     class InCode(metaclass=_dc.DataclassMeta):

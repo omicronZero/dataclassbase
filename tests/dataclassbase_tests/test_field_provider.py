@@ -1,8 +1,8 @@
 import typing as _typing
+
 import dataclassbase as _dc
 
-from . import check_field
-from . import fields
+from . import check_field, fields
 
 
 class SubField(_dc.Field):
@@ -53,12 +53,14 @@ def test_check_overriding_field() -> None:
     class BaseDataclass(metaclass=_dc.DataclassMeta):
         x: Base = fields.CheckOverrideCallbackField.declare(
             check_overriding_field_callback=check_overriding_field_callback_base,
-            check_overridden_field_callback=check_overridden_field_callback_base)
+            check_overridden_field_callback=check_overridden_field_callback_base,
+        )
 
     class ChildDataclass(BaseDataclass):
         x: Child = fields.CheckOverrideCallbackField.declare(
             check_overriding_field_callback=check_overriding_field_callback_child,
-            check_overridden_field_callback=check_overridden_field_callback_child)
+            check_overridden_field_callback=check_overridden_field_callback_child,
+        )
 
     base_field = BaseDataclass.__dataclass_fields__['x']
     child_field = ChildDataclass.__dataclass_fields__['x']
