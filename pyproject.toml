@@ -5,31 +5,35 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dataclassbase"
-version = "0.1"
 description = ""
 readme = "README.md"
 requires-python = ">=3.14"
-license = { file = "LICENSE.txt" }
+license = "MIT"
+license-files = ["LICENSE"]
 keywords = []
 
-# TODO: adjust dependencies
-dependencies = [
-]
+dynamic = ["version"]
+
+dependencies = []
+
 
 # see https://pypi.org/classifiers/
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "Topic :: Software Development :: Build Tools",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development",
+    "Typing :: Typed",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX",
+    "Operating System :: Unix",
+    "Operating System :: MacOS"
 ]
 
-[dependency-groups]
-testing = ["pytest", "pytest-cov"]
-linting = ["ruff"]
-typecheck = ["mypy"]
+[project.optional-dependencies]
+docs = ["setuptools-scm"]
 
 # configure ruff
 [tool.ruff]
@@ -55,3 +59,5 @@ quote-style = "single"
 [tool.mypy]
 python_version = "3.14"
 strict = true
+
+[tool.setuptools_scm]

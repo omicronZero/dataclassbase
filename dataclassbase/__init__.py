@@ -221,7 +221,7 @@ def field[**P, TField: Field](
     Declares, but does not fully initialize a field. The field will be instantiated when the dataclass gets built.
 
     Use this function to explicitly specify a field instance instead of letting it get initialized implicitly. For
-    derived field types, consider :py:method:`Field.declare`.
+    derived field types, consider :py:func:`Field.declare`.
 
     Example:
     >>> class Dataclass(DataclassMeta):

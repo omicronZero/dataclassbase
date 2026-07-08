@@ -1,3 +1,8 @@
+# install requirements
+pip install ruff mypy pytest pytest-cov pytest-markdown-summary --upgrade --quiet
+
+# run ruff and mypy
+
 echo Running Ruff/Check...
 ruff check --output-format=github --target-version=py314
 
