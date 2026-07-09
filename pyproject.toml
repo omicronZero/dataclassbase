@@ -5,7 +5,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dataclassbase"
-description = ""
+description = "Implement your own type of dataclass without the usual boilerplate code."
+
 readme = "README.md"
 requires-python = ">=3.14"
 license = "MIT"
@@ -33,7 +34,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-docs = ["setuptools-scm"]
+docs = ['pydata_sphinx_theme', 'setuptools', 'setuptools_scm']
 
 # configure ruff
 [tool.ruff]
