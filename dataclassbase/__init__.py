@@ -507,6 +507,38 @@ class ObjectHandler[TField: Field]:
         """
         return True
 
+    def handle_delete_attribute(
+        self,
+        obj: _typing.Any,
+        field: Field | None,
+        name: str,
+        inner_delete_attribute: _typing.Callable[[_typing.Any, str], None] | None,
+    ) -> None:
+        """
+        This method gets called when `__delattr__` is invoked for an object.
+
+        :param obj: The object on which the attribute gets deleted.
+        :param field: The field whose attribute gets deleted.
+        :param name: The name of the attribute of the field.
+        :param inner_delete_attribute: The original `__delattr__`-procedure, if there was one; `None` otherwise.
+        """
+        if field is not None:
+            raise RuntimeError('The deletion of attributes is not allowed for dataclass fields.')
+
+        if inner_delete_attribute is not None:
+            inner_delete_attribute(obj, name)
+
+    @property
+    def override_delete_attribute(self) -> bool:
+        """
+        Indicates whether the `__delattr_` behavior is to be overridden to route the
+        :py:func:`handle_delete_attribute`-method. Defaults to `True`.
+
+        Typically, delete-attribute gets overridden to prevent users from deleting attributes from the dataclasses.
+        :return: `True` if `__delattr__` is to be overridden, `False` otherwise.
+        """
+        return True
+
 
 def make_dataclass[TField: Field](
     cls: type,
@@ -561,11 +593,20 @@ def make_dataclass[TField: Field](
     if object_handler.override_set_attribute:
         inner_set_attribute = getattr(cls, '__setattr__', None)
 
-        def setattrib(self: _typing.Any, name: str, value: _typing.Any) -> None:
-            field = field_map.get(name)
-            object_handler.handle_set_attribute(self, field, name, value, inner_set_attribute)
+        def setattrib(self: _typing.Any, key: str, value: _typing.Any) -> None:
+            field = field_map.get(key)
+            object_handler.handle_set_attribute(self, field, key, value, inner_set_attribute)
 
         cls.__setattr__ = setattrib  # type: ignore[method-assign, assignment]
+
+    if object_handler.override_delete_attribute:
+        inner_del_attribute = getattr(cls, '__delattr__', None)
+
+        def delattrib(self: _typing.Any, item: str) -> None:
+            field = field_map.get(item)
+            object_handler.handle_delete_attribute(self, field, item, inner_del_attribute)
+
+        cls.__delattr__ = delattrib  # type: ignore[method-assign, assignment]
 
 
 @_typing.overload
