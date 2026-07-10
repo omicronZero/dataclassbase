@@ -175,6 +175,35 @@ def test_reassignment() -> None:
     assert instance.x == 12
 
 
+# Test __delattr__
+
+
+def test_field_deletion() -> None:
+    instance = ThreeFields(1)
+
+    with _pytest.raises(RuntimeError):
+        del instance.x
+
+
+def test_nonfield_assignment() -> None:
+    instance = ThreeFields(1)
+
+    instance.attr = 1
+
+    assert hasattr(instance, 'attr')
+
+
+def test_nonfield_deletion() -> None:
+    instance = ThreeFields(1)
+
+    instance.attr = 1
+
+    del instance.attr
+
+    with _pytest.raises(AttributeError):
+        _ = instance.attr
+
+
 #
 # Other
 #
