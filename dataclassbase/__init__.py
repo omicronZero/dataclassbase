@@ -452,7 +452,7 @@ class Frozen(BehaviorModifier):
         cls.__init__ = init  # type: ignore[assignment]
 
 
-class Eq(BehaviorModifier):
+class Equatable(BehaviorModifier):
     """Used to add equality and inequality operators to the dataclasses."""
 
     def __init__(self, fields_only: bool = True, override_hash: bool = True, override_eq: bool = True) -> None:
@@ -550,7 +550,7 @@ class Eq(BehaviorModifier):
             cls.__hash__ = hashcode  # type: ignore[assignment]
 
 
-class KwOnly(BehaviorModifier):
+class KeywordOnly(BehaviorModifier):
     """Enforces that the parameters supplied to a dataclass are indicated via keyword."""
 
     def __init__(self) -> None:
@@ -571,7 +571,7 @@ class KwOnly(BehaviorModifier):
         cls.__init__ = init  # type: ignore[method-assign, assignment]
 
 
-class PosOnly(BehaviorModifier):
+class PositionalOnly(BehaviorModifier):
     """Enforces that the parameters supplied to a dataclass are indicated via position."""
 
     def __init__(self) -> None:
@@ -1112,7 +1112,7 @@ def _default_dict_to_str(obj: DataclassbaseInstance, dct: dict[str, _typing.Any]
     return _default_format_dict(obj, dct)
 
 
-class Repr(BehaviorModifier):
+class Representable(BehaviorModifier):
     """
     Used to add functionality for string representation (:py:func:`str`) and object representation (:py:func:`repr`)
     to the dataclass.

@@ -26,7 +26,7 @@ plan to use it as a base for further work.
 
 [MIT](./LICENSE)
 
-## Overview
+## The Basics
 
 The `dataclasses` module provides very basic dataclasses with little customization. The objective of this package is to
 overcome this limitation by providing customizable dataclasses.
@@ -124,10 +124,33 @@ class VariantB(metaclass=DataclassMeta):
     defaulting: int = 1    
 ```
 
-# Why dataclassbase and not ...?
+## Fine-tuning the behavior of the dataclasses
+
+`dataclasses.dataclass` comes with quite a lot of nice additions: We can freeze the dataclass, equality and unequality
+operators get generated, a hash function may be provided, and so forth. This behavior can be imitated using the classes
+derived from the `BehaviorModifier` type. For now, these are
+
+* `Frozen`: Dataclasses cannot be assigned new values and cannot be reinitialized
+* `Representable`: Adds a string representation via `__repr__` and `__str__`
+* `Equatable`: Adds overloads for `__eq__` and `__ne__`, and, optionally, for `__hash__`
+* `PositionalOnly`: The initializer only allows positional arguments
+* `KeywordOnly`: The initializer only allows keyword arguments
+
+Add these as `modifiers` when calling `dataclass` or `make_dataclass` or return them as `_modifiers` in metaclasses 
+derived from `DataclassMetaBase`.
+
+Note that some of the behaviors are "unsafe", and it is up to you to decide whether your use-case is safe. For 
+example, hash codes typically change once fields of the dataclass change. Using such a class as a key is unsafe. You 
+thus will typically combine `Frozen` and `Equatable`. Note that `Frozen` does not affect nested dataclasses: If these
+are not frozen, the dataclass itself may still be mutable. Another unsafe example is the combination of `PositionalOnly`
+and `KeywordOnly` which does not make any sense, but is not caught for now.
+
+I may add such safeguards later, but for now it is obvious that such combinations do not make any sense.
+
+# When to use dataclassbase and not ...?
 
 ## Pydantic
 
 Pydantic's objective is to provide fast data validation and serialization [[1]](https://pydantic.dev/docs/validation/latest/get-started/).
-The package is much more abstract since it is not constrained to a single use-case such as data validation, and thus 
-does (hopefully) not give too strong restrictions on what you can/cannot do.
+dataclassbase aims to be much more abstract since it is not constrained to a single use-case such as data validation, 
+and thus does (hopefully) not give too strong restrictions on what you can/cannot do.

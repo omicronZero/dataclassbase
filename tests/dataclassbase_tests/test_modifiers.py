@@ -2,11 +2,11 @@ import pytest as _pytest
 
 import dataclassbase as _dc
 
-# Eq
+# Equatable
 
 
 def test_eq() -> None:
-    @_dc.dataclass(_dc.Eq)
+    @_dc.dataclass(_dc.Equatable)
     class Dataclass:
         x: int
 
@@ -14,7 +14,7 @@ def test_eq() -> None:
 
 
 def test_neq() -> None:
-    @_dc.dataclass(_dc.Eq)
+    @_dc.dataclass(_dc.Equatable)
     class Dataclass:
         x: int
 
@@ -37,11 +37,11 @@ def test_frozen() -> None:
     assert inst.x == 1
 
 
-# PosOnly
+# PositionalOnly
 
 
 def test_pos_only_accepts_pos() -> None:
-    @_dc.dataclass(_dc.PosOnly)
+    @_dc.dataclass(_dc.PositionalOnly)
     class Dataclass:
         x: int
 
@@ -51,7 +51,7 @@ def test_pos_only_accepts_pos() -> None:
 
 
 def test_pos_only_rejects_kw() -> None:
-    @_dc.dataclass(_dc.PosOnly)
+    @_dc.dataclass(_dc.PositionalOnly)
     class Dataclass:
         x: int
 
@@ -59,11 +59,11 @@ def test_pos_only_rejects_kw() -> None:
         Dataclass(x=1)
 
 
-# KwOnly
+# KeywordOnly
 
 
 def test_kw_only_accepts_kw() -> None:
-    @_dc.dataclass(_dc.KwOnly)
+    @_dc.dataclass(_dc.KeywordOnly)
     class Dataclass:
         x: int
 
@@ -73,7 +73,7 @@ def test_kw_only_accepts_kw() -> None:
 
 
 def test_kw_only_rejects_pos() -> None:
-    @_dc.dataclass(_dc.KwOnly)
+    @_dc.dataclass(_dc.KeywordOnly)
     class Dataclass:
         x: int
 
@@ -81,11 +81,11 @@ def test_kw_only_rejects_pos() -> None:
         Dataclass(1)
 
 
-# Repr
+# Representable
 
 
 def test_repr() -> None:
-    @_dc.dataclass(_dc.Repr)
+    @_dc.dataclass(_dc.Representable)
     class Dataclass:
         x: int
 
@@ -96,7 +96,7 @@ def test_repr() -> None:
 
 
 def test_repr_no_repr() -> None:
-    @_dc.dataclass(_dc.Repr(dict_to_repr=None))
+    @_dc.dataclass(_dc.Representable(dict_to_repr=None))
     class Dataclass:
         x: int
 
@@ -107,7 +107,7 @@ def test_repr_no_repr() -> None:
 
 
 def test_repr_no_str() -> None:
-    @_dc.dataclass(_dc.Repr(dict_to_str=None))
+    @_dc.dataclass(_dc.Representable(dict_to_str=None))
     class Dataclass:
         x: int
 
@@ -119,7 +119,7 @@ def test_repr_no_str() -> None:
 
 
 def test_repr_neither() -> None:
-    @_dc.dataclass(_dc.Repr(dict_to_str=None, dict_to_repr=None))
+    @_dc.dataclass(_dc.Representable(dict_to_str=None, dict_to_repr=None))
     class Dataclass:
         x: int
 
