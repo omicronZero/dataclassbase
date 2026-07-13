@@ -1,3 +1,4 @@
+import abc as _abc
 import types as _types
 import typing as _typing
 
@@ -381,12 +382,139 @@ class FieldProvider[TField: Field]:
             override.check_overridden_field(v)
 
 
+class BehaviorModifier(_abc.ABC):
+    @_abc.abstractmethod
+    def modify(self, cls: type[DataclassType]) -> None:
+        pass
+
+
+class ConstructorlessFactory[T](_typing.Protocol):
+    def __call__(self) -> T: ...
+
+
+class Frozen(BehaviorModifier):
+    def __init__(self) -> None:
+        pass
+
+    def modify(self, cls: type[DataclassType]) -> None:
+        inner_setattrib = getattr(cls, '__setattr__', None)
+        inner_init = getattr(cls, '__init__', None)
+
+        def setattrib(obj: _typing.Any, /, name: str, value: _typing.Any) -> None:
+            if name in cls.__dataclass_fields__ and obj.__dataclass_initialized__:
+                raise RuntimeError('The current dataclass is frozen.')
+
+            if inner_setattrib is not None:
+                inner_setattrib(obj, name, value)
+
+        cls.__setattr__ = setattrib  # type: ignore[method-assign]
+
+        def init(obj: _typing.Any, /, *args: _typing.Any, **kwargs: _typing.Any) -> None:
+            if hasattr(obj, '__dataclass_initialized__'):
+                raise RuntimeError(
+                    'The dataclass has already been initialized before. It cannot be reinitialized since it is frozen.'
+                )
+
+            if inner_init is not None:
+                inner_init(obj, *args, **kwargs)
+
+        cls.__init__ = init  # type: ignore[assignment]
+
+
+class Eq(BehaviorModifier):
+    def __init__(self, fields_only: bool = True, override_hash: bool = True, override_eq: bool = True) -> None:
+        self._fields_only = fields_only
+        self._override_hash = override_hash
+        self._override_eq = override_eq
+
+    @property
+    def override_hash(self) -> bool:
+        return self._override_hash
+
+    @property
+    def override_eq(self) -> bool:
+        return self._override_eq
+
+    @property
+    def fields_only(self) -> bool:
+        return self._fields_only
+
+    def modify(self, cls: type[DataclassType]) -> None:
+        if self.override_eq:
+
+            def eq(obj: DataclassType, other: DataclassType, /) -> bool:
+                if type(obj) is not type(other):
+                    return False
+
+                names: _typing.Iterable[str]
+
+                if self.fields_only:
+                    names = obj.__dict__.keys()
+
+                    if names != other.__dict__.keys():
+                        return False
+                else:
+                    names = cls.__dataclass_fields__
+
+                for name in names:
+                    if getattr(obj, name) != getattr(other, name):
+                        return False
+
+                return True
+
+            def ne(obj: DataclassType, other: DataclassType) -> bool:
+                return not eq(obj, other)
+
+            cls.__eq__ = eq  # type: ignore[assignment]
+            cls.__ne__ = ne  # type: ignore[assignment]
+
+        if self.override_hash:
+
+            def hashcode(obj: DataclassType) -> int:
+                names: _typing.Iterable[str]
+
+                if self.fields_only:
+                    names = obj.__dict__.keys()
+                else:
+                    names = cls.__dataclass_fields__
+
+                return hash(tuple(getattr(obj, name) for name in names))
+
+            cls.__hash__ = hashcode  # type: ignore[assignment]
+
+
+class KwOnly(BehaviorModifier):
+    def __init__(self) -> None:
+        pass
+
+    def modify(self, cls: type[DataclassType]) -> None:
+        inner_init = cls.__init__
+
+        def init(obj: _typing.Any, /, **kwargs: _typing.Any) -> None:
+            inner_init(obj, **kwargs)
+
+        cls.__init__ = init  # type: ignore[method-assign, assignment]
+
+
+class PosOnly(BehaviorModifier):
+    def __init__(self) -> None:
+        pass
+
+    def modify(self, cls: type[DataclassType]) -> None:
+        inner_init = cls.__init__
+
+        def init(obj: _typing.Any, /, *args: _typing.Any) -> None:
+            inner_init(obj, *args)
+
+        cls.__init__ = init  # type: ignore[method-assign, assignment]
+
+
 class ObjectHandler[TField: Field]:
     """Handles the initialization and set-attribute behavior of a dataclass-like object."""
 
     def init_instance(
         self,
-        cls: DataclassType[TField],
+        cls: DataclassType,
         obj: _typing.Any,
         args: tuple[_typing.Any, ...],
         kwargs: dict[str, _typing.Any],
@@ -544,6 +672,7 @@ def make_dataclass[TField: Field](
     cls: type,
     field_provider: _E[FieldProvider[TField] | FieldFactory[TField]] = ...,
     object_handler: _E[ObjectHandler[TField]] = ...,
+    modifiers: tuple[BehaviorModifier | ConstructorlessFactory[BehaviorModifier], ...] = (),
 ) -> None:
     """
     Makes the indicated class dataclass-like. The class must not be a dataclass, yet.
@@ -552,6 +681,7 @@ def make_dataclass[TField: Field](
     :param field_provider: A field provider used to initialize the fields of the dataclass. Depending on the type of
         field provider, fields may expose different types of behavior during initialization and attribute assignment.
     :param object_handler: Implements the initialization and attribute assignment of instances of the dataclass.
+    :param modifiers: Additional modifiers changing the behavior of the dataclass.
     """
     if '__dataclass_fields__' in cls.__dict__:
         raise TypeError('The indicated type already is a dataclass.')
@@ -608,12 +738,18 @@ def make_dataclass[TField: Field](
 
         cls.__delattr__ = delattrib  # type: ignore[method-assign, assignment]
 
+    modifiers = tuple(modifier if isinstance(modifier, BehaviorModifier) else modifier() for modifier in modifiers)
 
-@_typing.overload
+    cls.__dataclass_modifiers__ = modifiers  # type: ignore[attr-defined]
+
+    for modifier in modifiers:
+        modifier.modify(cls)
+
+
 def dataclass[TField: Field, TCls: type](
-    *,
+    *modifiers: BehaviorModifier | ConstructorlessFactory[BehaviorModifier],
     field_provider: _E[FieldProvider[TField] | FieldFactory[TField]] = ...,
-    object_handler: ObjectHandler[TField] = ...,
+    object_handler: _E[ObjectHandler[TField]] = ...,
 ) -> _typing.Callable[[TCls], TCls]:
     """
     Returns a function that that makes the classes supplied to it dataclass-like. The classes must not be dataclasses,
@@ -624,44 +760,14 @@ def dataclass[TField: Field, TCls: type](
     :param field_provider: A field provider used to initialize the fields of the dataclass. Depending on the type of
         field provider, fields may expose different types of behavior during initialization and attribute assignment.
     :param object_handler: Implements the initialization and attribute assignment of instances of the dataclass.
+    :param modifiers: Additional modifiers changing the behavior of the dataclass.
     """
-    ...
 
-
-@_typing.overload
-def dataclass[TField: Field, TCls: type](
-    cls: TCls,
-    /,
-    field_provider: _E[FieldProvider[TField] | FieldFactory[TField]] = ...,
-    object_handler: ObjectHandler[TField] = ...,
-) -> TCls:
-    """
-    Makes the indicated class dataclass-like. The class must not be a dataclass, yet.
-
-    :param cls: The class to make a dataclass.
-    :param field_provider: A field provider used to initialize the fields of the dataclass. Depending on the type of
-        field provider, fields may expose different types of behavior during initialization and attribute assignment.
-    :param object_handler: Implements the initialization and attribute assignment of instances of the dataclass.
-    """
-    ...
-
-
-def dataclass[TField: Field, TCls: type](
-    cls: _E[TCls] = ...,
-    /,
-    field_provider: _E[FieldProvider[TField] | FieldFactory[TField]] = ...,
-    object_handler: _E[ObjectHandler[TField]] = ...,
-) -> TCls | _typing.Callable[[TCls], TCls]:
-    if cls is ...:
-
-        def handle[T: type](cls: T) -> T:
-            make_dataclass(cls, field_provider, object_handler)
-            return cls
-
-        return handle
-    else:
-        make_dataclass(cls, field_provider, object_handler)
+    def handle[T: type](cls: T) -> T:
+        make_dataclass(cls, field_provider, object_handler, modifiers)
         return cls
+
+    return handle
 
 
 def _gather_fields[TField: Field](
@@ -729,7 +835,7 @@ class DataclassMetaBase[TField: Field](type):
     def __new__(mcs, name: str, bases: tuple[type, ...], dct: dict[str, _typing.Any]) -> type:
         cls = type.__new__(mcs, name, bases, dct)
 
-        make_dataclass(cls, mcs._field_provider(), mcs._object_handler())
+        make_dataclass(cls, mcs._field_provider(), mcs._object_handler(), mcs._modifiers())
 
         return cls
 
@@ -751,6 +857,10 @@ class DataclassMetaBase[TField: Field](type):
         """
         return ObjectHandler()
 
+    @classmethod
+    def _modifiers(cls) -> tuple[BehaviorModifier | ConstructorlessFactory[BehaviorModifier], ...]:
+        return ()
+
 
 @_typing.dataclass_transform(field_specifiers=(Field,))
 class DataclassMeta[TField: Field](DataclassMetaBase[TField]):
@@ -763,11 +873,37 @@ class DataclassMeta[TField: Field](DataclassMetaBase[TField]):
 
 
 @_typing.runtime_checkable
-class DataclassType[TField](_typing.Protocol):
+class DataclassType(_typing.Protocol):
     """A protocol that describes the members of dataclass-like classes."""
 
-    __dataclass_fields__: _typing.Mapping[str, TField]
+    __dataclass_fields__: _typing.ClassVar[_typing.Mapping[str, Field]]
     """The fields of the dataclass."""
+
+    def __init__(self, *args: _typing.Any, **kwargs: _typing.Any) -> None:
+        """
+        Initializes the dataclass.
+
+        :param args: The positional arguments to initialize the dataclass type with.
+        :param kwargs: The keyword arguments to initialize the dataclass type with.
+        """
+        ...
+
+
+@_typing.runtime_checkable
+class DataclassbaseInstance(_typing.Protocol):
+    """
+    A protocol that describes the instances of the dataclass-like classes created by this module via
+    :py:func:`make_dataclass`, etc.
+    """
+
+    __dataclass_initialized__: bool
+    """Determines the dataclass instance has been initialized."""
+
+    __dataclass_fields__: _typing.ClassVar[_typing.Mapping[str, Field]]
+    """The fields of the dataclass."""
+
+    __dataclass_modifiers__: _typing.ClassVar[tuple[BehaviorModifier, ...]]
+    """The behavior modifiers applied to the dataclass."""
 
 
 class TypeConstrainedField(Field):
@@ -812,3 +948,83 @@ class TypeConstrainedField(Field):
     def check_assignment(self, obj: _typing.Any) -> None:
         if not self._instance_check(obj):
             raise TypeError(f'The object is not a valid assignment to field `{self.name}`.')
+
+
+def as_dict(
+    obj: DataclassbaseInstance,
+    child_dataclass_to_dict: _E[_typing.Callable[[DataclassbaseInstance], _typing.Any]] | None = ...,
+    fields_only: bool = True,
+) -> dict[str, _typing.Any]:
+    if child_dataclass_to_dict is ...:
+
+        def child_dataclass_to_dict(obj: DataclassbaseInstance) -> _typing.Any:
+            return as_dict(obj, child_dataclass_to_dict=child_dataclass_to_dict, fields_only=fields_only)
+
+    dct = {k: getattr(obj, k) for k in type(obj).__dataclass_fields__} if fields_only else obj.__dict__
+
+    if child_dataclass_to_dict is not None:
+        for k, v in dct.items():
+            if isinstance(v, DataclassbaseInstance):
+                dct[k] = child_dataclass_to_dict(v)
+
+    return dct
+
+
+def _default_format_dict(obj: DataclassbaseInstance, dct: dict[str, _typing.Any], as_repr: bool) -> str:
+    parts = [type(obj).__name__, '(']
+
+    for i, (k, v) in enumerate(dct.items()):
+        if i > 0:
+            parts.append(', ')
+
+        parts.append(k)
+        parts.append('=')
+        parts.append(repr(v))
+
+    parts.append(')')
+
+    return ''.join(parts)
+
+
+def _default_dict_to_repr(obj: DataclassbaseInstance, dct: dict[str, _typing.Any]) -> str:
+    return _default_format_dict(obj, dct, as_repr=True)
+
+
+def _default_dict_to_str(obj: DataclassbaseInstance, dct: dict[str, _typing.Any]) -> str:
+    return _default_format_dict(obj, dct, as_repr=False)
+
+
+class Repr(BehaviorModifier):
+    def __init__(
+        self,
+        child_dataclass_to_dict: _E[_typing.Callable[[DataclassbaseInstance], _typing.Any]] | None = ...,
+        dict_to_str: _E[_typing.Callable[[DataclassbaseInstance, dict[str, _typing.Any], str], str]] | None = ...,
+        dict_to_repr: _E[_typing.Callable[[DataclassbaseInstance, dict[str, _typing.Any], str], str]] | None = ...,
+    ) -> None:
+        if dict_to_repr is ...:
+            dict_to_repr = _default_dict_to_repr
+
+        if dict_to_str is ...:
+            dict_to_str = _default_dict_to_str
+
+        self._child_dataclass_to_dict = child_dataclass_to_dict
+        self._dict_to_str = dict_to_str
+        self._dict_to_repr = dict_to_repr
+
+    def as_dict(self, instance: DataclassbaseInstance) -> dict[str, _typing.Any]:
+        return as_dict(instance)
+
+    def modify(self, cls: type[DataclassType]) -> None:
+        if self._dict_to_repr is not None:
+
+            def repr_impl(obj: DataclassbaseInstance) -> str:
+                return self._dict_to_repr(obj, self.as_dict(obj))
+
+            cls.__repr__ = repr_impl  # type: ignore[method-assign]
+
+        if self._dict_to_str is not None:
+
+            def str_impl(obj: DataclassbaseInstance) -> str:
+                return self._dict_to_str(obj, self.as_dict(obj))
+
+            cls.__str__ = str_impl  # type: ignore[method-assign]
