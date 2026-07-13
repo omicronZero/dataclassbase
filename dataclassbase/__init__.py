@@ -383,25 +383,56 @@ class FieldProvider[TField: Field]:
 
 
 class BehaviorModifier(_abc.ABC):
+    """An abstract base class defining a mechanism for changing the behavior of a dataclass and its instances."""
+
     @_abc.abstractmethod
     def modify(self, cls: type[DataclassType]) -> None:
         pass
 
 
 class ConstructorlessFactory[T](_typing.Protocol):
-    def __call__(self) -> T: ...
+    """A protocol that is used to declare functions that may take zero parameters."""
+
+    def __call__(self) -> T:
+        """
+        Invokes the parameterless function.
+
+        :return: The value returned by the function.
+        """
+        ...
 
 
 class Frozen(BehaviorModifier):
-    def __init__(self) -> None:
-        pass
+    """Used to make dataclass fields immutable."""
+
+    def __init__(self, fields_only: bool = True) -> None:
+        """
+        Initializes the current instance.
+
+        :param fields_only: Set to `True` to only freeze fields, set to `False` to freeze all attributes.
+        """
+        self._fields_only = fields_only
+
+    @property
+    def fields_only(self) -> bool:
+        """
+        Indicates whether the current class freezes only fields or all attributes.
+
+        :return: `True` if only fields, `False` if all attributes get frozen.
+        """
+        return self._fields_only
 
     def modify(self, cls: type[DataclassType]) -> None:
+        """
+        Makes the indicated dataclass frozen, i.e., after initialization, its fields may no longer be changed.
+
+        :param cls: The class to freeze.
+        """
         inner_setattrib = getattr(cls, '__setattr__', None)
         inner_init = getattr(cls, '__init__', None)
 
         def setattrib(obj: _typing.Any, /, name: str, value: _typing.Any) -> None:
-            if name in cls.__dataclass_fields__ and obj.__dataclass_initialized__:
+            if not self.fields_only or name in cls.__dataclass_fields__ and obj.__dataclass_initialized__:
                 raise RuntimeError('The current dataclass is frozen.')
 
             if inner_setattrib is not None:
@@ -422,24 +453,60 @@ class Frozen(BehaviorModifier):
 
 
 class Eq(BehaviorModifier):
+    """Used to add equality and inequality operators to the dataclasses."""
+
     def __init__(self, fields_only: bool = True, override_hash: bool = True, override_eq: bool = True) -> None:
+        """
+        Initializes the current instance.
+
+        :param fields_only: Set to `True` to only consider fields or to `False` to include all attributes in the
+            equality comparison.
+        :param override_hash: Set to `True` to support :py:func:`hash` by providing an implementation for
+            :py:func:`__hash__`. Note that this may be unsafe for mutable classes.
+        :param override_eq: Set to `True` if equality and inequality operators are to be overridden on dataclasses
+            whose behavior is modified by the current instance. This should typically be `True` unless you want to
+            implement the behavior by yourself.
+        """
         self._fields_only = fields_only
         self._override_hash = override_hash
         self._override_eq = override_eq
 
     @property
     def override_hash(self) -> bool:
+        """
+        Determines whether the current instance implements :py:func:`__hash__`. See :py:func:`__init__` for further
+        information.
+
+        :return: `True` if an implementation for :py:func:`__hash__` is generated, `False` if not.
+        """
         return self._override_hash
 
     @property
     def override_eq(self) -> bool:
+        """
+        Determines whether the current instance implements the equality and inequality operators. See
+        :py:func:`__init__` for further information.
+
+        :return: `True` if the equality and inequality operators get implemented, `False` if not.
+        """
         return self._override_eq
 
     @property
     def fields_only(self) -> bool:
+        """
+        Determines whether only the fields or all attributes are to be considered by the equality and inequality
+        operators and the hash function, if provided.
+
+        :return: `True` if only the fields, `False` if all attributes get considered.
+        """
         return self._fields_only
 
     def modify(self, cls: type[DataclassType]) -> None:
+        """
+        Implements, if demanded, the equality and inequality operator and the hash function for the indicated type.
+
+        :param cls: The type whose behavior to override.
+        """
         if self.override_eq:
 
             def eq(obj: DataclassType, other: DataclassType, /) -> bool:
@@ -484,10 +551,18 @@ class Eq(BehaviorModifier):
 
 
 class KwOnly(BehaviorModifier):
+    """Enforces that the parameters supplied to a dataclass are indicated via keyword."""
+
     def __init__(self) -> None:
+        """Initializes the current instance."""
         pass
 
     def modify(self, cls: type[DataclassType]) -> None:
+        """
+        Modifies the initializer of the indicated class to allow only keyword arguments.
+
+        :param cls: The dataclass to modify.
+        """
         inner_init = cls.__init__
 
         def init(obj: _typing.Any, /, **kwargs: _typing.Any) -> None:
@@ -497,10 +572,18 @@ class KwOnly(BehaviorModifier):
 
 
 class PosOnly(BehaviorModifier):
+    """Enforces that the parameters supplied to a dataclass are indicated via position."""
+
     def __init__(self) -> None:
+        """Initializes the current instance."""
         pass
 
     def modify(self, cls: type[DataclassType]) -> None:
+        """
+        Modifies the initializer of the indicated class to allow only positional arguments.
+
+        :param cls: The dataclass to modify.
+        """
         inner_init = cls.__init__
 
         def init(obj: _typing.Any, /, *args: _typing.Any) -> None:
@@ -738,11 +821,13 @@ def make_dataclass[TField: Field](
 
         cls.__delattr__ = delattrib  # type: ignore[method-assign, assignment]
 
-    modifiers = tuple(modifier if isinstance(modifier, BehaviorModifier) else modifier() for modifier in modifiers)
+    initialized_modifiers = tuple(
+        modifier if isinstance(modifier, BehaviorModifier) else modifier() for modifier in modifiers
+    )
 
-    cls.__dataclass_modifiers__ = modifiers  # type: ignore[attr-defined]
+    cls.__dataclass_modifiers__ = initialized_modifiers  # type: ignore[attr-defined]
 
-    for modifier in modifiers:
+    for modifier in initialized_modifiers:
         modifier.modify(cls)
 
 
@@ -955,12 +1040,21 @@ def as_dict(
     child_dataclass_to_dict: _E[_typing.Callable[[DataclassbaseInstance], _typing.Any]] | None = ...,
     fields_only: bool = True,
 ) -> dict[str, _typing.Any]:
+    """
+    Builds a dictionary from the fields of the indicated dataclass instance.
+
+    :param obj: The dataclass instance to build the dictionary from.
+    :param child_dataclass_to_dict: A function to call for child dataclasses.
+    :param fields_only: If `True`, only fields of the dataclass are added to the dictionary. Otherwise, all attributes
+        get processed.
+    :return: The dictionary of fields or attributes.
+    """
     if child_dataclass_to_dict is ...:
 
         def child_dataclass_to_dict(obj: DataclassbaseInstance) -> _typing.Any:
             return as_dict(obj, child_dataclass_to_dict=child_dataclass_to_dict, fields_only=fields_only)
 
-    dct = {k: getattr(obj, k) for k in type(obj).__dataclass_fields__} if fields_only else obj.__dict__
+    dct = {k: getattr(obj, k) for k in type(obj).__dataclass_fields__} if fields_only else obj.__dict__.copy()
 
     if child_dataclass_to_dict is not None:
         for k, v in dct.items():
@@ -970,7 +1064,15 @@ def as_dict(
     return dct
 
 
-def _default_format_dict(obj: DataclassbaseInstance, dct: dict[str, _typing.Any], as_repr: bool) -> str:
+def _default_format_dict(obj: DataclassbaseInstance, dct: dict[str, _typing.Any]) -> str:
+    """
+    Formats the indicated dictionary: We assume that the dataclass supports getting initialized with the parameters
+    indicated in the supplied dictionary. We display the parameters as keyword-only arguments.
+
+    :param obj: The type of the object the dictionary corresponds to.
+    :param dct: The dictionary.
+    :return: The string representation.
+    """
     parts = [type(obj).__name__, '(']
 
     for i, (k, v) in enumerate(dct.items()):
@@ -987,44 +1089,83 @@ def _default_format_dict(obj: DataclassbaseInstance, dct: dict[str, _typing.Any]
 
 
 def _default_dict_to_repr(obj: DataclassbaseInstance, dct: dict[str, _typing.Any]) -> str:
-    return _default_format_dict(obj, dct, as_repr=True)
+    """
+    The default implementation for returning the representation (:py:func:`repr`) of the object with the attributes or
+    fields supplied as a dict.
+
+    :param obj: The object to represent.
+    :param dct: The dictionary of fields or attributes.
+    :return: The default representation of the object.
+    """
+    return _default_format_dict(obj, dct)
 
 
 def _default_dict_to_str(obj: DataclassbaseInstance, dct: dict[str, _typing.Any]) -> str:
-    return _default_format_dict(obj, dct, as_repr=False)
+    """
+    The default implementation for returning the string representation (:py:func:`str`) of the object with the
+    attributes or fields supplied as a dict.
+
+    :param obj: The object to turn into a string.
+    :param dct: The dictionary of fields or attributes.
+    :return: The default str-representation of the object.
+    """
+    return _default_format_dict(obj, dct)
 
 
 class Repr(BehaviorModifier):
+    """
+    Used to add functionality for string representation (:py:func:`str`) and object representation (:py:func:`repr`)
+    to the dataclass.
+    """
+
     def __init__(
         self,
-        child_dataclass_to_dict: _E[_typing.Callable[[DataclassbaseInstance], _typing.Any]] | None = ...,
-        dict_to_str: _E[_typing.Callable[[DataclassbaseInstance, dict[str, _typing.Any], str], str]] | None = ...,
-        dict_to_repr: _E[_typing.Callable[[DataclassbaseInstance, dict[str, _typing.Any], str], str]] | None = ...,
+        obj_as_dict: _E[_typing.Callable[[DataclassbaseInstance], _typing.Any]] = ...,
+        dict_to_str: _E[_typing.Callable[[DataclassbaseInstance, dict[str, _typing.Any]], str]] | None = ...,
+        dict_to_repr: _E[_typing.Callable[[DataclassbaseInstance, dict[str, _typing.Any]], str]] | None = ...,
     ) -> None:
+        """
+        Initializes the current instance.
+
+        :param obj_as_dict: Invoked to turn a dataclass into a dictionary representation.
+        :param dict_to_str: Used to format a dataclass dictionary as a string (Used for :py:func:`str`). If `None`, the
+            :py:func:`__str__` method of the dataclass does not get overridden. Note that Python falls back to
+            :py:func:`__repr__` if :py:func:`__repr__` is not overridden.
+        :param dict_to_repr: Used to format a dataclass dictionary as a representation (Used for :py:func:`repr`). If
+            `None`, the :py:func:`__repr__` method does not get overridden.
+        """
+        if obj_as_dict is ...:
+            obj_as_dict = as_dict
+
         if dict_to_repr is ...:
             dict_to_repr = _default_dict_to_repr
 
         if dict_to_str is ...:
             dict_to_str = _default_dict_to_str
 
-        self._child_dataclass_to_dict = child_dataclass_to_dict
+        self._obj_as_dict = obj_as_dict
         self._dict_to_str = dict_to_str
         self._dict_to_repr = dict_to_repr
 
-    def as_dict(self, instance: DataclassbaseInstance) -> dict[str, _typing.Any]:
-        return as_dict(instance)
-
     def modify(self, cls: type[DataclassType]) -> None:
-        if self._dict_to_repr is not None:
+        """
+        Overrides :py:func:`__str__` and/or :py:func:`__repr__` according to the behavior defined during initialization.
 
-            def repr_impl(obj: DataclassbaseInstance) -> str:
-                return self._dict_to_repr(obj, self.as_dict(obj))
+        :param cls: The class to modify.
+        """
+        dict_to_repr = self._dict_to_repr
+        dict_to_str = self._dict_to_str
+
+        if dict_to_repr is not None:
+
+            def repr_impl(obj: _typing.Any, /) -> str:
+                return dict_to_repr(obj, self._obj_as_dict(obj))
 
             cls.__repr__ = repr_impl  # type: ignore[method-assign]
 
-        if self._dict_to_str is not None:
+        if dict_to_str is not None:
 
-            def str_impl(obj: DataclassbaseInstance) -> str:
-                return self._dict_to_str(obj, self.as_dict(obj))
+            def str_impl(obj: _typing.Any, /) -> str:
+                return dict_to_str(obj, self._obj_as_dict(obj))
 
             cls.__str__ = str_impl  # type: ignore[method-assign]

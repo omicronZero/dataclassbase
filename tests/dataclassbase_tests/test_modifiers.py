@@ -39,6 +39,7 @@ def test_frozen() -> None:
 
 # PosOnly
 
+
 def test_pos_only_accepts_pos() -> None:
     @_dc.dataclass(_dc.PosOnly)
     class Dataclass:
@@ -59,6 +60,7 @@ def test_pos_only_rejects_kw() -> None:
 
 
 # KwOnly
+
 
 def test_kw_only_accepts_kw() -> None:
     @_dc.dataclass(_dc.KwOnly)
