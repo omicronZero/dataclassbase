@@ -271,8 +271,51 @@ class FieldFactory[TField: Field](_typing.Protocol):
         ...
 
 
-class FieldProvider[TField: Field]:
-    """Handles the creation and override behavior of fields."""
+class FieldProvider[TField: Field](_abc.ABC):
+    """Defines an abstract class for handling the creation and override behavior of fields."""
+
+    @_abc.abstractmethod
+    def check_overrides(
+        self, base_fields: _types.MappingProxyType[str, Field], cls_fields: _types.MappingProxyType[str, Field]
+    ) -> None:
+        """
+        Checks whether a combination of base and child fields are valid.
+
+        By default, this method uses the :py:func:`Field.check_overriding_field` and
+        :py:func:`Field.check_overridden_field` methods of :class:`Field`.
+
+        :param base_fields: The fields of the base. These are the fields that get overridden.
+        :param cls_fields: The fields of the child. These are the fields that override the base fields.
+        """
+        ...
+
+    def gather_fields(self, cls: type) -> dict[str, TField]:
+        """
+        Gathers the dataclass fields of a class.
+
+        :param cls: The class from which to determine the fields.
+        :return: The mapping of field names to fields.
+        """
+        field_dict = self._gather_fields_core(cls)
+
+        if any(field.name != k for k, field in field_dict.items()):
+            raise RuntimeError('The field names must be preserved by the operations of the field provider.')
+
+        return field_dict
+
+    @_abc.abstractmethod
+    def _gather_fields_core(self, cls: type) -> dict[str, TField]:
+        """
+        Performs the core logic for gathering the dataclass fields of a class.
+
+        :param cls: The class from which to determine the fields.
+        :return: The mapping of field names to fields.
+        """
+        ...
+
+
+class BasicFieldProvider[TField: Field](FieldProvider[TField]):
+    """Implements a basic mechanism for handling the creation and override behavior of fields."""
 
     def __init__(
         self,
@@ -364,22 +407,46 @@ class FieldProvider[TField: Field]:
     def check_overrides(
         self, base_fields: _types.MappingProxyType[str, Field], cls_fields: _types.MappingProxyType[str, Field]
     ) -> None:
-        """
-        Checks whether a combination of base and child fields are valid.
-
-        By default, this method uses the :py:func:`Field.check_overriding_field` and
-        :py:func:`Field.check_overridden_field` methods of :class:`Field`.
-
-        :param base_fields: The fields of the base. These are the fields that get overridden.
-        :param cls_fields: The fields of the child. These are the fields that override the base fields.
-        :return:
-        """
         for k in base_fields.keys() & cls_fields.keys():
             v = base_fields[k]
             override = cls_fields[k]
 
             v.check_overriding_field(override)
             override.check_overridden_field(v)
+
+    def _gather_fields_core(self, cls: type) -> dict[str, TField]:
+        base_field_dict: dict[str, Field] = {}
+
+        # 1. gather the fields from the base classes
+
+        for base_type in reversed(cls.__mro__[1:]):
+            fields = getattr(base_type, '__dataclass_fields__', None)
+
+            if fields is not None:
+                base_field_dict.update(fields)
+
+        # 2. create new field representations of fields that we inherited from base classes
+
+        annotations = cls.__annotations__
+
+        field_dict: dict[str, TField] = {}
+
+        for k, field in base_field_dict.items():
+            if k in annotations:
+                # we leave out those that'll receive an annotation in 3.
+                continue
+
+            field_dict[k] = self.create_field_override(field)
+
+        # 3. create the fields defined via annotations on the current instance
+        for k, annot in annotations.items():
+            default = getattr(cls, k, _Unspecified)
+
+            field = self.make_field(k, annot, default is not _Unspecified, None if default is _Unspecified else default)
+
+            field_dict[k] = field
+
+        return field_dict
 
 
 class BehaviorModifier(_abc.ABC):
@@ -770,15 +837,15 @@ def make_dataclass[TField: Field](
         raise TypeError('The indicated type already is a dataclass.')
 
     if field_provider is ...:
-        field_provider = FieldProvider()
+        field_provider = BasicFieldProvider()
     elif not isinstance(field_provider, FieldProvider):
         # create the field provider from a `FieldFactory` object
-        field_provider = FieldProvider(field_provider)
+        field_provider = BasicFieldProvider(field_provider)
 
     if object_handler is ...:
         object_handler = ObjectHandler()
 
-    field_map = _gather_fields(cls, field_provider)
+    field_map = _types.MappingProxyType(field_provider._gather_fields_core(cls))
 
     cls.__dataclass_fields__ = field_map  # type: ignore[attr-defined]
 
@@ -855,53 +922,6 @@ def dataclass[TField: Field, TCls: type](
     return handle
 
 
-def _gather_fields[TField: Field](
-    cls: type, field_provider: FieldProvider[TField]
-) -> _types.MappingProxyType[str, TField]:
-    """
-    Gathers the fields of a dataclass from the annotations of its MRO.
-
-    :param cls: The class from which to determine the fields.
-    :param field_provider: The field provider used to initialize the fields.
-    :return: The mapping of field names to fields.
-    """
-    field_dict = {}
-
-    # 1. gather the fields from the base classes
-
-    for stp in reversed(cls.__mro__[1:]):
-        fields = getattr(stp, '__dataclass_fields__', None)
-
-        if fields is not None:
-            field_dict.update(fields)
-
-    # 2. create new field representations of fields that we inherited from base classes
-
-    annotations = cls.__annotations__
-
-    for k, field in field_dict.items():
-        if k in annotations:
-            # we leave out those that'll receive an annotation in 3.
-            continue
-
-        field_dict[k] = field_provider.create_field_override(field)
-
-    # 3. create the fields defined via annotations on the current instance
-    for k, annot in annotations.items():
-        default = getattr(cls, k, _Unspecified)
-
-        field = field_provider.make_field(
-            k, annot, default is not _Unspecified, None if default is _Unspecified else default
-        )
-
-        field_dict[k] = field
-
-    if any(field.name != k for k, field in field_dict.items()):
-        raise ValueError('The field names must be preserved by the operations of the field provider.')
-
-    return _types.MappingProxyType(field_dict)
-
-
 class DataclassMetaBase[TField: Field](type):
     """
     A base class for metaclasses inducing dataclass-like behavior. The :py:func:`make_dataclass` gets invoked on
@@ -931,7 +951,7 @@ class DataclassMetaBase[TField: Field](type):
 
         :return: The field provider.
         """
-        return FieldProvider()
+        return BasicFieldProvider()
 
     @classmethod
     def _object_handler(cls) -> ObjectHandler[TField]:
