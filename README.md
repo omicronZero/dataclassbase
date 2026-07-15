@@ -1,5 +1,7 @@
 # dataclassbase: Implement custom dataclasses
 
+See [Documentation](https://dataclassbase.readthedocs.io/en/latest/) for the latest documentation.
+
 ## What it is and how to get it
 
 **dataclassbase** is a small toolkit for providing your own dataclasses. For dataclasses, attributes are declared via 
