@@ -63,10 +63,11 @@ attribute assignment (`__setattr__`) of objects of the generated dataclass. We t
 behavior of the dataclass.
 
 If you omit the `field_provider` or `object_handler`, the respective default implementations provided in the 
-`FieldProvider` and `ObjectHandler` classes, which reproduce the default dataclass behavior, are used instead.
-If you provide a callable matching the signature of `dataclassbase.Field` to `field_provider`, a `FieldProvider` is
-generated. Therefore, you can directly specify the type of field to use, as long as it matches the respective signature.
-You can also replace the `default`-value if it indicates a value you want to process.
+`BasicFieldProvider` and `ObjectHandler` classes, which reproduce the default dataclass behavior, are used instead.
+If you provide a callable matching the signature of `dataclassbase.Field` to `field_provider`, a `BasicFieldProvider` is
+generated using the initializer as a factory. Therefore, you can directly specify the type of field to use, as long as 
+it matches the respective signature. In your custom field implementation, you may, for example, further process the 
+value supplied to the `default` parameter.
 
 Note that while it suffices to call `dataclassbase.dataclass` on a class to initialize dataclass-like behavior, it does
 not truly behave like a dataclass to static type checkers since it lacks the `typing.dataclass_transform` decorator.
@@ -85,7 +86,7 @@ the methods `_field_provider` and `_object_handler` which act as factories for t
 the types using the metaclass.
 
 ```python
-from dataclassbase import DataclassMetaBase, Field, FieldProvider
+from dataclassbase import DataclassMetaBase, Field, BasicFieldProvider
 from typing import dataclass_transform
 
 
@@ -99,10 +100,10 @@ class CustomField(Field):
 @dataclass_transform
 class CustomDataclassMeta(DataclassMetaBase[Field]):
     @classmethod
-    def _field_provider(cls) -> FieldProvider[Field]:
+    def _field_provider(cls) -> BasicFieldProvider[Field]:
         # we want it to return our custom field. The factory works since the signature of `CustomField.__init__` matches
         # the one of `Field.__init__`
-        return FieldProvider(CustomField)
+        return BasicFieldProvider(CustomField)
     
 class VariantA(metaclass=CustomDataclassMeta):
     field: int
