@@ -35,6 +35,7 @@ classifiers = [
 
 [project.optional-dependencies]
 docs = ['pydata_sphinx_theme', 'setuptools', 'setuptools_scm']
+pre_commit = ['ruff', 'mypy']
 
 # configure ruff
 [tool.ruff]
