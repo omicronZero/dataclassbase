@@ -104,7 +104,8 @@ class CustomDataclassMeta(DataclassMetaBase[Field]):
         # we want it to return our custom field. The factory works since the signature of `CustomField.__init__` matches
         # the one of `Field.__init__`
         return BasicFieldProvider(CustomField)
-    
+
+
 class VariantA(metaclass=CustomDataclassMeta):
     field: int
     defaulting: int = 1
