@@ -123,6 +123,7 @@ The default implementation is `DataclassMeta` which just uses the default values
 ```python
 from dataclassbase import DataclassMeta
 
+
 class VariantB(metaclass=DataclassMeta):
     field: int
     defaulting: int = 1
