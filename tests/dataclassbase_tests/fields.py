@@ -12,9 +12,9 @@ class CallbackField(_dc.Field):
         has_default: bool = False,
         default: _typing.Any = None,
         default_factory: _typing.Callable[[], None] | None = None,
-        check_overriding_field_callback: _typing.Callable[[_dc.Field], None] = None,
-        check_overridden_field_callback: _typing.Callable[[_dc.Field], None] = None,
-        check_assignment_callback: _typing.Callable[[_typing.Any], None] = None,
+        check_overriding_field_callback: _typing.Callable[[_dc.Field], None] | None = None,
+        check_overridden_field_callback: _typing.Callable[[_dc.Field], None] | None = None,
+        check_assignment_callback: _typing.Callable[[_typing.Any], None] | None = None,
     ) -> None:
         super().__init__(name, annotation, has_default, default, default_factory)
 

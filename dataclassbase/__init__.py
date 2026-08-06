@@ -314,6 +314,18 @@ class FieldProvider[TField: Field](_abc.ABC):
         ...
 
 
+def _skip_annotation(cls: type, key: str, value: _typing.Any) -> bool:
+    """
+    Helper function used to determine whether an annotation is to be skipped.
+
+    :param cls: The dataclass to be constructed.
+    :param key: The key of the annotation.
+    :param value: The value of the annotation.
+    :return: `True` if the annotation is to be skipped, `False` if it refers to a dataclass variable.
+    """
+    return _typing.get_origin(value) is _typing.ClassVar
+
+
 class BasicFieldProvider[TField: Field](FieldProvider[TField]):
     """Implements a basic mechanism for handling the creation and override behavior of fields."""
 
@@ -427,7 +439,7 @@ class BasicFieldProvider[TField: Field](FieldProvider[TField]):
 
         # 2. create new field representations of fields that we inherited from base classes
 
-        annotations = cls.__annotations__
+        annotations = {k: v for k, v in cls.__annotations__.items() if not _skip_annotation(cls, k, v)}
 
         field_dict: dict[str, TField] = {}
 
@@ -967,7 +979,7 @@ class DataclassMetaBase[TField: Field](type):
         return ()
 
 
-@_typing.dataclass_transform(field_specifiers=(Field,))
+@_typing.dataclass_transform(field_specifiers=(Field, FieldInitializer))
 class DataclassMeta[TField: Field](DataclassMetaBase[TField]):
     """
     Provides a basic :class:`Field`-based metaclass. When used as a metaclass, the class and any subclass inherit a

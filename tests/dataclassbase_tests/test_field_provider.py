@@ -29,10 +29,10 @@ class Child(Base):
 
 
 def test_check_overriding_field() -> None:
-    base_overridden_by = None
-    base_overriding = None
-    child_overridden_by = None
-    child_overriding = None
+    base_overridden_by: _dc.Field | None = None
+    base_overriding: _dc.Field | None = None
+    child_overridden_by: _dc.Field | None = None
+    child_overriding: _dc.Field | None = None
 
     def check_overriding_field_callback_base(field: _dc.Field) -> None:
         nonlocal base_overridden_by
@@ -54,13 +54,13 @@ def test_check_overriding_field() -> None:
         x: Base = fields.CallbackField.declare(
             check_overriding_field_callback=check_overriding_field_callback_base,
             check_overridden_field_callback=check_overridden_field_callback_base,
-        )
+        )  # type: ignore[assignment]
 
     class ChildDataclass(BaseDataclass):
         x: Child = fields.CallbackField.declare(
             check_overriding_field_callback=check_overriding_field_callback_child,
             check_overridden_field_callback=check_overridden_field_callback_child,
-        )
+        )  # type: ignore[assignment]
 
     base_field = BaseDataclass.__dataclass_fields__['x']
     child_field = ChildDataclass.__dataclass_fields__['x']
@@ -79,7 +79,7 @@ def test_check_assignment() -> None:
         reassigned = True
 
     class Dataclass(metaclass=_dc.DataclassMeta):
-        x: int = fields.CallbackField.declare(check_assignment_callback=check_assignment_callback)
+        x: int = fields.CallbackField.declare(check_assignment_callback=check_assignment_callback)  # type: ignore[assignment]
 
     instance = Dataclass(1)
 
@@ -87,3 +87,15 @@ def test_check_assignment() -> None:
 
     instance.x = 1
     assert reassigned
+
+
+def test_gather_ignores_class_vars() -> None:
+    @_dc.dataclass()
+    class X:
+        ignored1: _typing.ClassVar[int]
+        ignored2: _typing.ClassVar[int] = 2
+
+        a: int
+        b: int
+
+    assert X.__dataclass_fields__.keys() == {'a', 'b'}  # type: ignore[attr-defined]

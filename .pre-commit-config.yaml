@@ -1,0 +1,22 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.1
+    hooks:
+      - id: ruff-check
+        args: [ --output-format=github, --target-version=py314 ]
+      - id: ruff-format
+        args: [ --diff, --target-version=py314 ]
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: MyPy
+        language: python
+        entry: mypy
+        additional_dependencies: [ '.[pre_commit]' ]
+        types: [python]
