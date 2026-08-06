@@ -92,7 +92,7 @@ from typing import dataclass_transform
 
 class CustomField(Field):
     # you can override the methods provided by `Field` to control the behavior of the field in derived classes,
-    # superclasses, to check the assignments, etc. You can also change the behavior of `__init__` as long as its 
+    # superclasses, to check the assignments, etc. You can also change the behavior of `__init__` as long as its
     # signature matches the one from the base
     pass
 
@@ -125,7 +125,7 @@ from dataclassbase import DataclassMeta
 
 class VariantB(metaclass=DataclassMeta):
     field: int
-    defaulting: int = 1    
+    defaulting: int = 1
 ```
 
 ## Fine-tuning the behavior of the dataclasses
