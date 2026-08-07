@@ -63,3 +63,9 @@ python_version = "3.14"
 strict = true
 
 [tool.setuptools_scm]
+
+[tool.coverage.run]
+source = ["dataclassbase"]
+omit = [
+    "tests/*"
+]
