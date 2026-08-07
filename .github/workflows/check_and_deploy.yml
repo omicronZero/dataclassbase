@@ -44,7 +44,8 @@ jobs:
       - name: Run tests
         run: |
           mkdir summary
-          coverage run -m pytest --cov-report=markdown:summary/coverage.md --markdown-summary-file=summary/summary.md
+          coverage run -m pytest tests --markdown-summary-file=summary/summary.md
+          coverage report --format=markdown > summary/coverage.md
           echo -e "# Summary\n" >> $GITHUB_STEP_SUMMARY
           cat summary/summary.md >> $GITHUB_STEP_SUMMARY
           echo -e "\n# Coverage\n" >> $GITHUB_STEP_SUMMARY
