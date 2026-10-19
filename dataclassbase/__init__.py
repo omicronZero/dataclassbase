@@ -878,7 +878,7 @@ def make_dataclass[TField: Field](
         object_handler.init_instance(cls, self, args, kwargs)  # type: ignore[arg-type]
 
         if user_init is not None:
-            user_init(self, *args, *kwargs)
+            user_init(self, *args, **kwargs)
 
     cls.__init__ = init  # type: ignore[misc]
 
