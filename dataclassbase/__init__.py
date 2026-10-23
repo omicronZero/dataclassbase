@@ -236,6 +236,23 @@ def field[**P](
     return FieldDeclaration(__cls, *args, **kwargs)
 
 
+@_typing.runtime_checkable
+class DataclassType(_typing.Protocol):
+    """A protocol that describes the members of dataclass-like classes."""
+
+    __dataclassbase_fields__: _util.MappingProto[str, Field]
+    """The fields of the dataclass."""
+
+    def __call__(self, *args: _typing.Any, **kwargs: _typing.Any) -> _typing.Self:
+        """
+        Initializes the dataclass.
+
+        :param args: The positional arguments to initialize the dataclass type with.
+        :param kwargs: The keyword arguments to initialize the dataclass type with.
+        """
+        ...
+
+
 class _Unspecified:
     """The class is used as a singleton together with dictionaries."""
 
@@ -512,7 +529,7 @@ class BehaviorModifier(_abc.ABC):
     @_abc.abstractmethod
     def modify(
         self,
-        cls: type[DataclassType],
+        cls: DataclassType,
         fields: _types.MappingProxyType[str, Field],
         declared_fields: _types.MappingProxyType[str, Field],
     ) -> None:
@@ -573,7 +590,7 @@ class Frozen(BehaviorModifier):
 
     def modify(
         self,
-        cls: type[DataclassType],
+        cls: DataclassType,
         fields: _types.MappingProxyType[str, Field],
         declared_fields: _types.MappingProxyType[str, Field],
     ) -> None:
@@ -603,7 +620,7 @@ class Frozen(BehaviorModifier):
             if inner_setattrib is not None:
                 inner_setattrib(obj, name, value)
 
-        cls.__setattr__ = setattrib  # type: ignore[method-assign]
+        cls.__setattr__ = setattrib  # type: ignore[assignment, method-assign]
 
         def init(obj: _typing.Any, /, *args: _typing.Any, **kwargs: _typing.Any) -> None:
             if getattr(obj, '__dataclassbase_initialized__', False):
@@ -614,7 +631,7 @@ class Frozen(BehaviorModifier):
             if inner_init is not None:
                 inner_init(obj, *args, **kwargs)
 
-        cls.__init__ = init  # type: ignore[assignment]
+        cls.__init__ = init  # type: ignore[misc]
 
 
 class Equatable(BehaviorModifier):
@@ -668,7 +685,7 @@ class Equatable(BehaviorModifier):
 
     def modify(
         self,
-        cls: type[DataclassType],
+        cls: DataclassType,
         fields: _types.MappingProxyType[str, Field],
         declared_fields: _types.MappingProxyType[str, Field],
     ) -> None:
@@ -732,7 +749,7 @@ class KeywordOnly(BehaviorModifier):
 
     def modify(
         self,
-        cls: type[DataclassType],
+        cls: DataclassType,
         fields: _types.MappingProxyType[str, Field],
         declared_fields: _types.MappingProxyType[str, Field],
     ) -> None:
@@ -744,12 +761,12 @@ class KeywordOnly(BehaviorModifier):
         :param declared_fields:
             The fields of the dataclass that were declared on the type itself rather than being inherited.
         """
-        inner_init = cls.__init__
+        inner_init = cls.__init__  # type: ignore[misc]
 
         def init(obj: _typing.Any, /, **kwargs: _typing.Any) -> None:
             inner_init(obj, **kwargs)
 
-        cls.__init__ = init  # type: ignore[method-assign, assignment]
+        cls.__init__ = init  # type: ignore[misc]
 
 
 class PositionalOnly(BehaviorModifier):
@@ -761,7 +778,7 @@ class PositionalOnly(BehaviorModifier):
 
     def modify(
         self,
-        cls: type[DataclassType],
+        cls: DataclassType,
         fields: _types.MappingProxyType[str, Field],
         declared_fields: _types.MappingProxyType[str, Field],
     ) -> None:
@@ -773,12 +790,12 @@ class PositionalOnly(BehaviorModifier):
         :param declared_fields:
             The fields of the dataclass that were declared on the type itself rather than being inherited.
         """
-        inner_init = cls.__init__
+        inner_init = cls.__init__  # type: ignore[misc]
 
         def init(obj: _typing.Any, /, *args: _typing.Any) -> None:
             inner_init(obj, *args)
 
-        cls.__init__ = init  # type: ignore[method-assign, assignment]
+        cls.__init__ = init  # type: ignore[misc]
 
 
 class ObjectHandler:
@@ -1038,6 +1055,9 @@ def make_dataclass(
     if '__dataclassbase_fields__' in cls.__dict__:
         raise TypeError('The indicated type already is a dataclass.')
 
+    if issubclass(cls, BehaviorModifier):
+        raise RuntimeError('Behavior modifiers cannot be turned into dataclasses.')
+
     if field_provider is ...:
         field_provider = BasicFieldProvider()
     elif not isinstance(field_provider, FieldProvider):
@@ -1100,7 +1120,7 @@ def make_dataclass(
 
             object_handler.init_instance_subtype_post(_typing.cast(DataclassType, cls), self, args, kwargs)
 
-    cls.__init__ = init  # type: ignore[misc]
+    cls.__init__ = init  # type: ignore[method-assign]
 
     if object_handler.override_set_attribute:
         inner_set_attribute = getattr(cls, '__setattr__', None)
@@ -1109,7 +1129,7 @@ def make_dataclass(
             field = field_map.get(key)
             object_handler.handle_set_attribute(self, field, key, value, inner_set_attribute)
 
-        cls.__setattr__ = setattrib  # type: ignore[method-assign, assignment]
+        cls.__setattr__ = setattrib  # type: ignore[method-assign]
 
     if object_handler.override_delete_attribute:
         inner_del_attribute = getattr(cls, '__delattr__', None)
@@ -1118,7 +1138,7 @@ def make_dataclass(
             field = field_map.get(item)
             object_handler.handle_delete_attribute(self, field, item, inner_del_attribute)
 
-        cls.__delattr__ = delattrib  # type: ignore[method-assign, assignment]
+        cls.__delattr__ = delattrib  # type: ignore[method-assign]
 
     initialized_modifiers = tuple(
         modifier if isinstance(modifier, BehaviorModifier) else modifier() for modifier in modifiers
@@ -1126,16 +1146,38 @@ def make_dataclass(
 
     cls.__dataclassbase_modifiers__ = initialized_modifiers  # type: ignore[attr-defined]
 
+    dc = _typing.cast(DataclassType, _typing.cast(object, cls))
+
     for modifier in initialized_modifiers:
-        modifier.modify(cls, field_map, declared_fields)
+        modifier.modify(dc, field_map, declared_fields)
 
 
 @_typing.dataclass_transform()
+@_typing.overload
 def dataclass[TCls: type](
     *modifiers: BehaviorModifier | ConstructorlessFactory[BehaviorModifier],
     field_provider: _E[FieldProvider | FieldFactory] = ...,
     object_handler: _E[ObjectHandler] = ...,
-) -> _typing.Callable[[TCls], TCls]:
+) -> _typing.Callable[[TCls], TCls]: ...
+
+
+@_typing.dataclass_transform()
+@_typing.overload
+def dataclass[TCls: type](
+    cls: TCls,
+    /,
+    *modifiers: BehaviorModifier | ConstructorlessFactory[BehaviorModifier],
+    field_provider: _E[FieldProvider | FieldFactory] = ...,
+    object_handler: _E[ObjectHandler] = ...,
+) -> TCls: ...
+
+
+@_typing.dataclass_transform()
+def dataclass(
+    *modifiers: type | BehaviorModifier | ConstructorlessFactory[BehaviorModifier],
+    field_provider: _E[FieldProvider | FieldFactory] = ...,
+    object_handler: _E[ObjectHandler] = ...,
+) -> _typing.Any:
     """
     Returns a function that that makes the classes supplied to it dataclass-like. The classes must not be dataclasses,
     yet.
@@ -1148,8 +1190,20 @@ def dataclass[TCls: type](
     :param modifiers: Additional modifiers changing the behavior of the dataclass.
     """
 
-    def handle[T: type](cls: T) -> T:
+    if len(modifiers) > 0 and isinstance(modifiers[0], type) and not issubclass(modifiers[0], BehaviorModifier):
+        cls = _typing.cast(type, modifiers[0])
+        modifiers = _typing.cast(tuple[BehaviorModifier | ConstructorlessFactory[BehaviorModifier], ...], modifiers[1:])
         make_dataclass(cls, field_provider, object_handler, modifiers)
+        return cls
+
+    def handle[T: type](cls: T) -> T:
+        make_dataclass(
+            cls,
+            field_provider,
+            object_handler,
+            _typing.cast(tuple[BehaviorModifier | ConstructorlessFactory[BehaviorModifier], ...], modifiers),
+        )
+
         return cls
 
     return handle
@@ -1166,12 +1220,17 @@ class DataclassMetaBase(type):
     is derived from the :class:`DataclassMetaBase` class if you want to define a class with custom field specifiers and
     add a :py:func:`typing.dataclass_transform`-decoration to them. Use the :py:func:`_field_provider` to control the
     conversion of the field specifies into fields.
+
+    Note that this class is not intended to be used directly as a metaclass of a dataclass. The
+    :py:func:`typing.dataclass_transform` method does not get applied to the current type since it would constrain the
+    parameters of :py:func:`typing.dataclass_transform` to a specific choice. Use a derived class and apply
+    `:py:func:`typing.dataclass_transform` to it or use the default implementation :py:class:`DataclassMeta`.
     """
 
     __dataclassbase_fields__: _types.MappingProxyType[str, Field]
     __dataclassbase_initialized__: bool
     __dataclassbase_modifiers__: tuple[BehaviorModifier, ...]
-    __dataclassbase_types__: tuple[type[DataclassType], ...]
+    __dataclassbase_types__: tuple[DataclassType, ...]
 
     def __new__(mcs, name: str, bases: tuple[type, ...], dct: dict[str, _typing.Any]) -> type:
         cls = type.__new__(mcs, name, bases, dct)
@@ -1213,21 +1272,56 @@ class DataclassMeta(DataclassMetaBase):
     pass
 
 
-@_typing.runtime_checkable
-class DataclassType(_typing.Protocol):
-    """A protocol that describes the members of dataclass-like classes."""
+class DataclassBase:
+    """
+    A base class for classes inducing dataclass-like behavior. The :py:func:`make_dataclass` gets invoked during the
+    initialization of the subclasses.
 
-    __dataclassbase_fields__: _util.MappingProto[str, Field]
-    """The fields of the dataclass."""
+    Note that this class is not intended to be used directly as a base class of a dataclass. The
+    :py:func:`typing.dataclass_transform` method does not get applied to the current type since it would constrain the
+    parameters of :py:func:`typing.dataclass_transform` to a specific choice. Use a derived class and apply
+    `:py:func:`typing.dataclass_transform` to it or use the default implementation :py:class:`Dataclass`.
+    """
 
-    def __call__(self, *args: _typing.Any, **kwargs: _typing.Any) -> _typing.Self:
+    __dataclassbase_fields__: _types.MappingProxyType[str, Field]
+    __dataclassbase_initialized__: bool
+    __dataclassbase_modifiers__: tuple[BehaviorModifier, ...]
+    __dataclassbase_types__: tuple[DataclassType, ...]
+
+    def __init_subclass__(cls) -> None:
+        make_dataclass(cls, cls._field_provider(), cls._object_handler(), cls._modifiers())
+
+    @classmethod
+    def _field_provider(cls) -> FieldProvider:
         """
-        Initializes the dataclass.
+        The field provider to use to control the creation and override behavior of fields.
 
-        :param args: The positional arguments to initialize the dataclass type with.
-        :param kwargs: The keyword arguments to initialize the dataclass type with.
+        :return: The field provider.
         """
-        ...
+        return BasicFieldProvider()
+
+    @classmethod
+    def _object_handler(cls) -> ObjectHandler:
+        """
+        The object handler to use to control the object initialization and set-attribute behavior.
+
+        :return: The object handler.
+        """
+        return ObjectHandler()
+
+    @classmethod
+    def _modifiers(cls) -> tuple[BehaviorModifier | ConstructorlessFactory[BehaviorModifier], ...]:
+        return ()
+
+
+@_typing.dataclass_transform(field_specifiers=(Field, FieldInitializer))
+class Dataclass(DataclassBase):
+    """
+    Provides a basic :class:`Field`-based metaclass. When used as a metaclass, the class and any subclass inherit a
+    dataclass-like behavior. See :class:`DataclassMetaBase` and :py:func:`make_dataclass` for further information.
+    """
+
+    pass
 
 
 @_typing.runtime_checkable
@@ -1402,7 +1496,7 @@ class Representable(BehaviorModifier):
 
     def modify(
         self,
-        cls: type[DataclassType],
+        cls: DataclassType,
         fields: _types.MappingProxyType[str, Field],
         declared_fields: _types.MappingProxyType[str, Field],
     ) -> None:
@@ -1422,11 +1516,11 @@ class Representable(BehaviorModifier):
             def repr_impl(obj: _typing.Any, /) -> str:
                 return dict_to_repr(obj, self._obj_as_dict(obj))
 
-            cls.__repr__ = repr_impl  # type: ignore[method-assign]
+            cls.__repr__ = repr_impl  # type: ignore[assignment, method-assign]
 
         if dict_to_str is not None:
 
             def str_impl(obj: _typing.Any, /) -> str:
                 return dict_to_str(obj, self._obj_as_dict(obj))
 
-            cls.__str__ = str_impl  # type: ignore[method-assign]
+            cls.__str__ = str_impl  # type: ignore[assignment, method-assign]

@@ -4,6 +4,17 @@ import pytest as _pytest
 
 import dataclassbase as _dc
 
+# initialization
+
+
+def test_parameterless_decoration() -> None:
+    @_dc.dataclass
+    class SomeClass:
+        some_field: str
+
+    SomeClass('')
+
+
 # Equatable
 
 
