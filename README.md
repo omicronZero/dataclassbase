@@ -78,10 +78,10 @@ assumed to be fields or to be converted into some. We do that conversion in the 
 In doing so, I would constrain proper static type checking on the fields. Therefore, I would rather let you indicate the
 types yourself.
 To achieve true dataclass-like behavior on a type checker, you can call `typing.dataclass_transform` yourself or rely on
-a metaclass derived from `DataclassMetaBase[TField]`:
+a metaclass derived from `DataclassMetaBase[Field]`:
 
 Rather than using `dataclassbase.dataclass` as above, you can define your own dataclass by deriving a metaclass from
-class `DataclassMetaBase[TField]` and attaching a `typing.dataclass_transform` to it. `DataclassMetaBase` invokes
+class `DataclassMetaBase[Field]` and attaching a `typing.dataclass_transform` to it. `DataclassMetaBase` invokes
 `make_dataclass` when creating the new type (`dataclass` is the decorator-variant of `make_dataclass`). It provides
 the methods `_field_provider` and `_object_handler` which act as factories for the field provider and object handler for
 the types using the metaclass.
@@ -99,9 +99,9 @@ class CustomField(Field):
 
 
 @dataclass_transform
-class CustomDataclassMeta(DataclassMetaBase[Field]):
+class CustomDataclassMeta(DataclassMetaBase):
     @classmethod
-    def _field_provider(cls) -> BasicFieldProvider[Field]:
+    def _field_provider(cls) -> BasicFieldProvider:
         # we want it to return our custom field. The factory works since the signature of `CustomField.__init__` matches
         # the one of `Field.__init__`
         return BasicFieldProvider(CustomField)

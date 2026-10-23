@@ -75,12 +75,12 @@ def test_inherited_fields() -> None:
 
 
 class InheritedOverlap(Inherited):
-    field: int = 0
+    other: str = ''
 
 
 def test_inherited_overlap_fields() -> None:
-    check_field(InheritedOverlap, 'field', int, 0)
-    check_field(InheritedOverlap, 'other', str)
+    check_field(InheritedOverlap, 'field', int)
+    check_field(InheritedOverlap, 'other', str, '')
 
 
 # Test initialization
@@ -142,27 +142,27 @@ def test_mixed_init_partial() -> None:
 
 def test_extra_fields_pos() -> None:
     with _pytest.raises(TypeError):
-        ThreeFields(1, '2', 3.0, 4)
+        ThreeFields(1, '2', 3.0, 4)  # type: ignore[call-arg]
 
 
 def test_extra_fields_kw() -> None:
     with _pytest.raises(TypeError):
-        ThreeFields(x=1, y='2', z=3.0, w=4)
+        ThreeFields(x=1, y='2', z=3.0, w=4)  # type: ignore[call-arg]
 
 
 def test_extra_fields_mixture() -> None:
     with _pytest.raises(TypeError):
-        ThreeFields(1, 2, z=3.0, w=4)
+        ThreeFields(1, 2, z=3.0, w=4)  # type: ignore[call-arg, arg-type]
 
 
 def test_extra_fields_overlap() -> None:
     with _pytest.raises(TypeError):
-        ThreeFields(1, '2', y='x')
+        ThreeFields(1, '2', y='x')  # type: ignore[misc]
 
 
 def test_fields_overlap() -> None:
     with _pytest.raises(TypeError):
-        Base(y='y', z='z')
+        Base(y='y', z='z')  # type: ignore[call-arg]
 
 
 # Test __setattr__
@@ -188,20 +188,20 @@ def test_field_deletion() -> None:
 def test_nonfield_assignment() -> None:
     instance = ThreeFields(1)
 
-    instance.attr = 1
+    instance.undefined_attr = 1  # type: ignore[attr-defined]
 
-    assert hasattr(instance, 'attr')
+    assert hasattr(instance, 'undefined_attr')
 
 
 def test_nonfield_deletion() -> None:
     instance = ThreeFields(1)
 
-    instance.attr = 1
+    instance.undefined_attr = 1  # type: ignore[attr-defined]
 
-    del instance.attr
+    del instance.undefined_attr  # type: ignore[attr-defined]
 
     with _pytest.raises(AttributeError):
-        _ = instance.attr
+        _ = instance.undefined_attr  # type: ignore[attr-defined]
 
 
 #
@@ -222,8 +222,23 @@ def test_identity_for_fields() -> None:
     field = _dc.Field('x', int)
 
     class FieldContainer(metaclass=_dc.DataclassMeta):
-        x: int = field
+        x: int = field  # type: ignore[assignment]
 
     check_field(FieldContainer, 'x', int)
 
-    assert FieldContainer.__dataclass_fields__['x'] is field
+    assert FieldContainer.__dataclassbase_fields__['x'] is field
+
+
+def test_initialized() -> None:
+    x = Base(0)
+
+    assert x.__dataclassbase_initialized__  # type: ignore
+
+
+def test_error_nondefault_after_default() -> None:
+    # fields with a default value must not be followed by fields without a default value
+    with _pytest.raises(RuntimeError):
+
+        class InvalidDefaultingMixture(metaclass=_dc.DataclassMeta):
+            x: int = 0
+            y: int  # type: ignore[misc]
