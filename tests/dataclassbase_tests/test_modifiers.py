@@ -1,6 +1,19 @@
+import typing as _typing
+
 import pytest as _pytest
 
 import dataclassbase as _dc
+
+# initialization
+
+
+def test_parameterless_decoration() -> None:
+    @_dc.dataclass
+    class SomeClass:
+        some_field: str
+
+    SomeClass('')
+
 
 # Equatable
 
@@ -35,6 +48,106 @@ def test_frozen() -> None:
         inst.x = 2
 
     assert inst.x == 1
+
+
+def test_frozen_combo() -> None:
+    @_dc.dataclass(_dc.Frozen, _dc.KeywordOnly)
+    class A:
+        x: int
+
+    @_dc.dataclass(_dc.KeywordOnly, _dc.Frozen)
+    class B:
+        x: int
+
+    A(x=1)
+    B(x=1)
+
+
+def test_frozen_inheritance() -> None:
+    @_dc.dataclass(_dc.Frozen)
+    class A:
+        x: int
+
+    @_dc.dataclass(_dc.Frozen)
+    class B(A):
+        x: int
+
+    instance = B(x=1)
+
+    with _pytest.raises(RuntimeError):
+        instance.x = 2
+
+
+def test_frozen_inheritance_nondataclass() -> None:
+    @_dc.dataclass(_dc.Frozen)
+    @_typing.dataclass_transform()
+    class A:
+        x: int
+
+    class B(A):
+        pass
+
+    instance = B(x=1)
+
+    with _pytest.raises(RuntimeError):
+        instance.x = 2
+
+
+def test_frozen_inheritance_mix() -> None:
+    @_dc.dataclass(_dc.Frozen)
+    class A:
+        x: int
+
+    @_dc.dataclass(_dc.Frozen)
+    class B:
+        x: int
+
+    @_dc.dataclass(_dc.Frozen)
+    class C(A, B):
+        pass
+
+    instance = C(x=1)
+
+    with _pytest.raises(RuntimeError):
+        instance.x = 2
+
+
+def test_frozen_inheritance_mix_nondataclass() -> None:
+    # A, B are dataclasses, C(A, B) is not.
+    # Note that this is a special case that is rather untypical
+
+    @_dc.dataclass(_dc.Frozen)
+    class A:
+        x: int
+
+    @_dc.dataclass(_dc.Frozen)
+    class B:
+        x: int
+
+    class C(A, B):
+        pass
+
+    instance = C(x=1)
+
+    with _pytest.raises(RuntimeError):
+        instance.x = 3
+
+
+def test_frozen_inheritance_partly() -> None:
+    @_dc.dataclass()
+    class A:
+        x: int
+
+    @_dc.dataclass(_dc.Frozen)
+    class B(A):
+        y: int
+
+    instance = B(x=1, y=2)
+
+    instance.x = 3
+
+    with _pytest.raises(RuntimeError):
+        instance.y = 4
 
 
 # PositionalOnly

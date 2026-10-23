@@ -62,8 +62,8 @@ def test_check_overriding_field() -> None:
             check_overridden_field_callback=check_overridden_field_callback_child,
         )  # type: ignore[assignment]
 
-    base_field = BaseDataclass.__dataclass_fields__['x']
-    child_field = ChildDataclass.__dataclass_fields__['x']
+    base_field = BaseDataclass.__dataclassbase_fields__['x']
+    child_field = ChildDataclass.__dataclassbase_fields__['x']
 
     assert base_overridden_by is child_field
     assert base_overriding is None
@@ -98,4 +98,4 @@ def test_gather_ignores_class_vars() -> None:
         a: int
         b: int
 
-    assert X.__dataclass_fields__.keys() == {'a', 'b'}  # type: ignore[attr-defined]
+    assert X.__dataclassbase_fields__.keys() == {'a', 'b'}  # type: ignore[attr-defined]
