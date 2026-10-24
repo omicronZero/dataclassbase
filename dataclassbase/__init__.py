@@ -316,7 +316,17 @@ class Fields(_typing.NamedTuple):
 class FieldProvider(_abc.ABC):
     """Defines an abstract class for handling the creation and override behavior of fields."""
 
-    @_abc.abstractmethod
+    def contextualize(self, cls: type, modifiers: tuple[BehaviorModifier, ...]) -> FieldProvider:
+        """
+        Returns a field provider to be used together with the indicated type. By default, this returns the current
+        instance.
+
+        :param cls: The type to be turned into a dataclass.
+        :param modifiers: The modifiers the dataclass has been initialized with.
+        :return: The field provider to be used together with the indicated type.
+        """
+        return self
+
     def check_overrides(
         self, base_fields: _types.MappingProxyType[str, Field], cls_fields: _types.MappingProxyType[str, Field]
     ) -> None:
@@ -329,7 +339,12 @@ class FieldProvider(_abc.ABC):
         :param base_fields: The fields of the base. These are the fields that get overridden.
         :param cls_fields: The fields of the child. These are the fields that override the base fields.
         """
-        ...
+        for k in base_fields.keys() & cls_fields.keys():
+            v = base_fields[k]
+            override = cls_fields[k]
+
+            v.check_overriding_field(override)
+            override.check_overridden_field(v)
 
     def gather_fields(self, cls: type) -> Fields:
         """
@@ -459,16 +474,6 @@ class BasicFieldProvider(FieldProvider):
             default=original.default,
             default_factory=original.default_factory,
         )
-
-    def check_overrides(
-        self, base_fields: _types.MappingProxyType[str, Field], cls_fields: _types.MappingProxyType[str, Field]
-    ) -> None:
-        for k in base_fields.keys() & cls_fields.keys():
-            v = base_fields[k]
-            override = cls_fields[k]
-
-            v.check_overriding_field(override)
-            override.check_overridden_field(v)
 
     def _gather_fields_core(self, cls: type) -> Fields:
         base_field_dict: dict[str, Field] = {}
@@ -801,6 +806,17 @@ class PositionalOnly(BehaviorModifier):
 class ObjectHandler:
     """Handles the initialization and set-attribute behavior of a dataclass-like object."""
 
+    def contextualize(self, cls: type, modifiers: tuple[BehaviorModifier, ...]) -> ObjectHandler:
+        """
+        Returns an object handler to be used together with the indicated type. By default, this returns the current
+        instance.
+
+        :param cls: The type to be turned into a dataclass.
+        :param modifiers: The modifiers the dataclass has been initialized with.
+        :return: The object handler to be used together with the indicated type.
+        """
+        return self
+
     def init_instance(
         self,
         cls: DataclassType,
@@ -873,7 +889,16 @@ class ObjectHandler:
                 assignments[k] = field.default
 
         # assign on current instance
+        self._initialize_fields(cls, obj, assignments)
 
+    def _initialize_fields(self, cls: DataclassType, obj: _typing.Any, assignments: dict[str, _typing.Any]) -> None:
+        """
+        Initializes the supplied instance with the indicated field values.
+
+        :param cls: The dataclass type.
+        :param obj: The object on which to perform the assignment. This is an instance of the indicated dataclass type.
+        :param assignments: The assignments.
+        """
         for k, v in assignments.items():
             setattr(obj, k, v)
 
@@ -915,6 +940,7 @@ class ObjectHandler:
         :param args: The positional arguments.
         :param kwargs: The keyword arguments.
         """
+        pass
 
     def init_instance_subtype_post(
         self,
@@ -931,6 +957,7 @@ class ObjectHandler:
         :param args: The positional arguments.
         :param kwargs: The keyword arguments.
         """
+        pass
 
     def handle_set_attribute(
         self,
@@ -1052,11 +1079,16 @@ def make_dataclass(
     :param object_handler: Implements the initialization and attribute assignment of instances of the dataclass.
     :param modifiers: Additional modifiers changing the behavior of the dataclass.
     """
+
+    # validate
+
     if '__dataclassbase_fields__' in cls.__dict__:
         raise TypeError('The indicated type already is a dataclass.')
 
     if issubclass(cls, BehaviorModifier):
         raise RuntimeError('Behavior modifiers cannot be turned into dataclasses.')
+
+    # normalize and prepare parameters
 
     if field_provider is ...:
         field_provider = BasicFieldProvider()
@@ -1066,6 +1098,15 @@ def make_dataclass(
 
     if object_handler is ...:
         object_handler = ObjectHandler()
+
+    initialized_modifiers = tuple(
+        modifier if isinstance(modifier, BehaviorModifier) else modifier() for modifier in modifiers
+    )
+
+    field_provider = field_provider.contextualize(cls, initialized_modifiers)
+    object_handler = object_handler.contextualize(cls, initialized_modifiers)
+
+    # retrieve base class and current class fields and merge them
 
     fields = field_provider.gather_fields(cls)
     merged_fields = fields.all()
@@ -1081,13 +1122,17 @@ def make_dataclass(
     declared_fields = _types.MappingProxyType(fields.declared_fields)
     field_map = _types.MappingProxyType(merged_fields)
 
-    cls.__dataclassbase_fields__ = field_map  # type: ignore[attr-defined]
-    cls.__dataclassbase_types__ = (cls,)  # type: ignore[attr-defined]
+    # check that all base classes allow the requested overrides
 
     for base in cls.__bases__:
         # check with all bases (that are not metaclasses) that our overrides are valid
         if isinstance(base, DataclassMetaBase):
             field_provider.check_overrides(base.__dataclassbase_fields__, field_map)
+
+    # modify `cls` to become a dataclass
+
+    cls.__dataclassbase_fields__ = field_map  # type: ignore[attr-defined]
+    cls.__dataclassbase_types__ = (cls,)  # type: ignore[attr-defined]
 
     # determine the new `__init__` procedure. The old one gets called, too, if there is one (different from the one of
     # `object`)
@@ -1140,10 +1185,6 @@ def make_dataclass(
 
         cls.__delattr__ = delattrib  # type: ignore[method-assign]
 
-    initialized_modifiers = tuple(
-        modifier if isinstance(modifier, BehaviorModifier) else modifier() for modifier in modifiers
-    )
-
     cls.__dataclassbase_modifiers__ = initialized_modifiers  # type: ignore[attr-defined]
 
     dc = _typing.cast(DataclassType, _typing.cast(object, cls))
@@ -1158,7 +1199,19 @@ def dataclass[TCls: type](
     *modifiers: BehaviorModifier | ConstructorlessFactory[BehaviorModifier],
     field_provider: _E[FieldProvider | FieldFactory] = ...,
     object_handler: _E[ObjectHandler] = ...,
-) -> _typing.Callable[[TCls], TCls]: ...
+) -> _typing.Callable[[TCls], TCls]:
+    """
+    Returns a function that that makes the classes supplied to it dataclass-like. The classes must not be dataclasses,
+    yet.
+
+    Intended to be used as a decorator.
+
+    :param modifiers: Additional modifiers changing the behavior of the dataclass.
+    :param field_provider: A field provider used to initialize the fields of the dataclass. Depending on the type of
+        field provider, fields may expose different types of behavior during initialization and attribute assignment.
+    :param object_handler: Implements the initialization and attribute assignment of instances of the dataclass.
+    """
+    ...
 
 
 @_typing.dataclass_transform()
@@ -1169,7 +1222,20 @@ def dataclass[TCls: type](
     *modifiers: BehaviorModifier | ConstructorlessFactory[BehaviorModifier],
     field_provider: _E[FieldProvider | FieldFactory] = ...,
     object_handler: _E[ObjectHandler] = ...,
-) -> TCls: ...
+) -> TCls:
+    """
+    Makes the indicated class dataclass-like. The class must not be a dataclass, yet.
+
+    Intended to be used as a decorator.
+
+    :param cls: The class to turn into a dataclass.
+    :param modifiers: Additional modifiers changing the behavior of the dataclass.
+    :param field_provider: A field provider used to initialize the fields of the dataclass. Depending on the type of
+        field provider, fields may expose different types of behavior during initialization and attribute assignment.
+    :param object_handler: Implements the initialization and attribute assignment of instances of the dataclass.
+    :return: The class supplied in `cls` now turned into a dataclass.
+    """
+    ...
 
 
 @_typing.dataclass_transform()
@@ -1178,18 +1244,6 @@ def dataclass(
     field_provider: _E[FieldProvider | FieldFactory] = ...,
     object_handler: _E[ObjectHandler] = ...,
 ) -> _typing.Any:
-    """
-    Returns a function that that makes the classes supplied to it dataclass-like. The classes must not be dataclasses,
-    yet.
-
-    Intended to be used as a decorator.
-
-    :param field_provider: A field provider used to initialize the fields of the dataclass. Depending on the type of
-        field provider, fields may expose different types of behavior during initialization and attribute assignment.
-    :param object_handler: Implements the initialization and attribute assignment of instances of the dataclass.
-    :param modifiers: Additional modifiers changing the behavior of the dataclass.
-    """
-
     if len(modifiers) > 0 and isinstance(modifiers[0], type) and not issubclass(modifiers[0], BehaviorModifier):
         cls = _typing.cast(type, modifiers[0])
         modifiers = _typing.cast(tuple[BehaviorModifier | ConstructorlessFactory[BehaviorModifier], ...], modifiers[1:])
